@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-gray-900 bg-gray-50;
+  }
+}
+
+/* TipTap editor placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  @apply text-gray-400 float-left h-0 pointer-events-none;
+  content: attr(data-placeholder);
+}
+
+/* TipTap table styles */
+.tiptap table {
+  @apply border-collapse w-full;
+}
+.tiptap td, .tiptap th {
+  @apply border border-gray-300 p-2 text-left;
+}
+.tiptap th {
+  @apply bg-gray-50 font-semibold;
+}
+
+/* Search highlights */
+mark {
+  @apply bg-yellow-200 px-0.5 rounded;
+}
