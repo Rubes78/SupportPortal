@@ -188,6 +188,7 @@ model SiteConfig {
   anonymousCommentsEnabled Boolean  @default(true)
   articlesPerPage          Int      @default(10)
   showAuthor               Boolean  @default(true)
+  googleServiceAccountKey  String?  @db.Text
   updatedAt                DateTime @updatedAt
 
   @@map("site_config")

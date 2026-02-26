@@ -14,22 +14,31 @@ function maskDatabaseUrl(url: string | undefined): string {
   }
 }
 
+function parseGoogleEmail(key: string | null): string | null {
+  if (!key) return null;
+  try {
+    return JSON.parse(key).client_email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function ConfigurationPage() {
   const config = await getSiteConfig();
 
   const dbUrl = maskDatabaseUrl(process.env.DATABASE_URL);
   const nextAuthUrl = process.env.NEXTAUTH_URL || "Not set";
   const secretSet = !!process.env.NEXTAUTH_SECRET && process.env.NEXTAUTH_SECRET !== "replace-me";
-  const googleConfigured =
-    !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY &&
-    process.env.GOOGLE_SERVICE_ACCOUNT_KEY.trim().length > 10;
+
+  // Parse email server-side — never send the raw key to the client
+  const googleClientEmail = parseGoogleEmail(config.googleServiceAccountKey);
 
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Configuration</h1>
       <p className="text-sm text-gray-500 mb-8">Manage site-wide settings for the support portal.</p>
 
-      <ConfigForm config={config} />
+      <ConfigForm config={config} googleClientEmail={googleClientEmail} />
 
       {/* System Info — read-only */}
       <div className="mt-10">
@@ -42,23 +51,12 @@ export default async function ConfigurationPage() {
             value={secretSet ? "Configured ✓" : "Not set ✗"}
             ok={secretSet}
           />
-          <Row
-            label="Google Docs"
-            value={googleConfigured ? "Service account configured ✓" : "Not configured"}
-            ok={googleConfigured}
-          />
         </div>
         {!secretSet && (
           <p className="mt-2 text-xs text-amber-600">
             Set <code className="font-mono bg-amber-50 px-1 rounded">NEXTAUTH_SECRET</code> in your{" "}
             <code className="font-mono bg-amber-50 px-1 rounded">.env</code> file:{" "}
             <code className="font-mono bg-amber-50 px-1 rounded">openssl rand -base64 32</code>
-          </p>
-        )}
-        {!googleConfigured && (
-          <p className="mt-1 text-xs text-gray-400">
-            Google Docs import is disabled. Add{" "}
-            <code className="font-mono bg-gray-50 px-1 rounded">GOOGLE_SERVICE_ACCOUNT_KEY</code> to enable it.
           </p>
         )}
       </div>
@@ -82,11 +80,7 @@ function Row({
       <span className="w-32 shrink-0 text-gray-500">{label}</span>
       <span
         className={`${mono ? "font-mono text-xs" : ""} ${
-          ok === true
-            ? "text-green-700"
-            : ok === false
-            ? "text-red-600"
-            : "text-gray-700"
+          ok === true ? "text-green-700" : ok === false ? "text-red-600" : "text-gray-700"
         }`}
       >
         {value}

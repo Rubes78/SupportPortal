@@ -7,9 +7,28 @@ import type { SiteConfig } from "@prisma/client";
 
 interface ConfigFormProps {
   config: SiteConfig;
+  googleClientEmail: string | null;
 }
 
-export function ConfigForm({ config }: ConfigFormProps) {
+interface GoogleKeyInfo {
+  client_email?: string;
+  project_id?: string;
+  type?: string;
+}
+
+function parseKeyInfo(raw: string): { ok: true; info: GoogleKeyInfo } | { ok: false; error: string } {
+  try {
+    const parsed = JSON.parse(raw);
+    const required = ["type", "project_id", "private_key", "client_email"];
+    const missing = required.filter((f) => !parsed[f]);
+    if (missing.length > 0) return { ok: false, error: `Missing fields: ${missing.join(", ")}` };
+    return { ok: true, info: parsed };
+  } catch {
+    return { ok: false, error: "Invalid JSON" };
+  }
+}
+
+export function ConfigForm({ config, googleClientEmail }: ConfigFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState({
@@ -24,9 +43,20 @@ export function ConfigForm({ config }: ConfigFormProps) {
     showAuthor: config.showAuthor,
   });
 
+  // Google Docs state (managed separately from main settings)
+  const [googleKeyInput, setGoogleKeyInput] = useState("");
+  const [clearGoogle, setClearGoogle] = useState(false);
+  const [savingGoogle, setSavingGoogle] = useState(false);
+
   const set = (key: keyof typeof values, val: unknown) =>
     setValues((v) => ({ ...v, [key]: val }));
 
+  // Live parse of whatever is in the textarea
+  const keyPreview = googleKeyInput.trim()
+    ? parseKeyInfo(googleKeyInput.trim())
+    : null;
+
+  /* ── Main settings save ── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -49,6 +79,58 @@ export function ConfigForm({ config }: ConfigFormProps) {
       setSaving(false);
     }
   };
+
+  /* ── Google credentials save ── */
+  const handleGoogleSave = async () => {
+    if (clearGoogle) {
+      setSavingGoogle(true);
+      try {
+        const res = await fetch("/api/admin/config", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ googleServiceAccountKey: null }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        toast.success("Google credentials removed");
+        setClearGoogle(false);
+        router.refresh();
+      } catch {
+        toast.error("Failed to remove credentials");
+      } finally {
+        setSavingGoogle(false);
+      }
+      return;
+    }
+
+    if (!googleKeyInput.trim()) return;
+
+    if (!keyPreview?.ok) {
+      toast.error("Fix the JSON errors before saving");
+      return;
+    }
+
+    setSavingGoogle(true);
+    try {
+      const res = await fetch("/api/admin/config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ googleServiceAccountKey: googleKeyInput.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed");
+      }
+      toast.success("Google credentials saved");
+      setGoogleKeyInput("");
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save credentials");
+    } finally {
+      setSavingGoogle(false);
+    }
+  };
+
+  const currentlyConfigured = !!googleClientEmail && !clearGoogle;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -145,6 +227,114 @@ export function ConfigForm({ config }: ConfigFormProps) {
         >
           {saving ? "Saving…" : "Save Configuration"}
         </button>
+      </div>
+
+      {/* Google Docs — separate section, separate save */}
+      <div className="border-t border-gray-200 pt-8">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Google Docs Integration</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Paste a Google service account JSON to enable importing from Google Docs.{" "}
+          <a
+            href="https://console.cloud.google.com/iam-admin/serviceaccounts"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            Create a service account →
+          </a>
+        </p>
+
+        <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+          {/* Current status */}
+          <div className="flex items-center justify-between px-4 py-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Status</p>
+              {currentlyConfigured ? (
+                <p className="text-xs text-green-700 mt-0.5">
+                  Configured — <span className="font-mono">{googleClientEmail}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-0.5">Not configured</p>
+              )}
+            </div>
+            {currentlyConfigured && !clearGoogle && (
+              <button
+                type="button"
+                onClick={() => setClearGoogle(true)}
+                className="text-xs text-red-600 hover:text-red-700 border border-red-200 rounded px-2 py-1 transition-colors"
+              >
+                Remove credentials
+              </button>
+            )}
+            {clearGoogle && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-600">Will be removed on save</span>
+                <button
+                  type="button"
+                  onClick={() => setClearGoogle(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Undo
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Key input */}
+          {!clearGoogle && (
+            <div className="px-4 py-4 space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                {currentlyConfigured ? "Replace service account JSON" : "Service account JSON"}
+              </label>
+              <textarea
+                value={googleKeyInput}
+                onChange={(e) => setGoogleKeyInput(e.target.value)}
+                placeholder='{"type":"service_account","project_id":"...","client_email":"...@....iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\n...", ...}'
+                className={`${input} h-28 resize-none font-mono text-xs`}
+                spellCheck={false}
+              />
+
+              {/* Live validation feedback */}
+              {keyPreview && (
+                <div
+                  className={`text-xs rounded px-3 py-2 ${
+                    keyPreview.ok
+                      ? "bg-green-50 text-green-700"
+                      : "bg-red-50 text-red-600"
+                  }`}
+                >
+                  {keyPreview.ok ? (
+                    <>
+                      ✓ Valid JSON &mdash;{" "}
+                      <span className="font-mono">{keyPreview.info.client_email}</span>{" "}
+                      ({keyPreview.info.project_id})
+                    </>
+                  ) : (
+                    <>✗ {keyPreview.error}</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleGoogleSave}
+            disabled={
+              savingGoogle ||
+              (!clearGoogle && (!googleKeyInput.trim() || !keyPreview?.ok))
+            }
+            className="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-md hover:bg-gray-900 disabled:opacity-40 transition-colors"
+          >
+            {savingGoogle
+              ? "Saving…"
+              : clearGoogle
+              ? "Remove credentials"
+              : "Save Google credentials"}
+          </button>
+        </div>
       </div>
     </form>
   );

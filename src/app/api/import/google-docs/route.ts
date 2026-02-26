@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const docs = getGoogleDocsClient();
+    const docs = await getGoogleDocsClient();
     const response = await docs.documents.get({ documentId: docId });
     const doc = response.data;
 

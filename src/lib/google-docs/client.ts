@@ -1,9 +1,21 @@
 import { google } from "googleapis";
+import { prisma } from "@/lib/prisma";
 
-export function getGoogleDocsClient() {
-  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+export async function getGoogleDocsClient() {
+  // DB config takes precedence over env var
+  let keyJson: string | null | undefined = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || null;
+
+  const config = await prisma.siteConfig.findUnique({
+    where: { id: "default" },
+    select: { googleServiceAccountKey: true },
+  });
+
+  if (config?.googleServiceAccountKey) {
+    keyJson = config.googleServiceAccountKey;
+  }
+
   if (!keyJson) {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set");
+    throw new Error("Google service account is not configured");
   }
 
   const credentials = JSON.parse(keyJson);
