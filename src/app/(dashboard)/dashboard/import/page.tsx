@@ -6,13 +6,14 @@ import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { FolderImport } from "@/components/import/FolderImport";
 
 const TiptapEditor = dynamic(
   () => import("@/components/editor/TiptapEditor").then((m) => m.TiptapEditor),
   { ssr: false, loading: () => <div className="h-64 border rounded-lg bg-gray-50 animate-pulse" /> }
 );
 
-type Tab = "google-docs" | "docx";
+type Tab = "google-docs" | "google-folder" | "docx";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function ImportPage() {
   const [docxFile, setDocxFile] = useState<File | null>(null);
   const [isLoadingDocx, setIsLoadingDocx] = useState(false);
 
-  // Shared preview state
+  // Shared preview state (single-doc tabs)
   const [previewTitle, setPreviewTitle] = useState("");
   const [previewContent, setPreviewContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -95,6 +96,7 @@ export default function ImportPage() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "google-docs", label: "Google Docs" },
+    { id: "google-folder", label: "Google Drive Folder" },
     { id: "docx", label: "Word (.docx)" },
   ];
 
@@ -144,6 +146,9 @@ export default function ImportPage() {
         </div>
       )}
 
+      {/* Google Drive Folder tab */}
+      {activeTab === "google-folder" && <FolderImport />}
+
       {/* Docx tab */}
       {activeTab === "docx" && (
         <div className="space-y-4">
@@ -174,8 +179,8 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* Preview */}
-      {previewContent && (
+      {/* Preview (single-doc tabs only) */}
+      {previewContent && activeTab !== "google-folder" && (
         <div className="mt-8 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Preview & Edit</h2>
           <Input

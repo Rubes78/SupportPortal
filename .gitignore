@@ -28,3 +28,4 @@ yarn-error.log*
 
 # uploads (runtime, not source)
 /public/uploads
+logs/
