@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/config";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -34,6 +35,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const config = await getSiteConfig();
+
+  if (!config.commentsEnabled) {
+    return NextResponse.json({ error: "Comments are disabled" }, { status: 403 });
+  }
+
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -41,11 +48,19 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const { content, articleId, parentId, authorName, authorEmail } = parsed.data;
 
+  // Reject anonymous comments if disabled and user is not signed in
+  if (!session?.user && !config.anonymousCommentsEnabled) {
+    return NextResponse.json({ error: "You must be signed in to comment" }, { status: 403 });
+  }
+
   // Verify article exists and is published
   const article = await prisma.article.findUnique({ where: { id: articleId } });
   if (!article || article.status !== "PUBLISHED") {
     return NextResponse.json({ error: "Article not found" }, { status: 404 });
   }
+
+  const isPrivileged =
+    session?.user?.role === "ADMIN" || session?.user?.role === "EDITOR";
 
   const comment = await prisma.comment.create({
     data: {
@@ -55,7 +70,7 @@ export async function POST(req: NextRequest) {
       authorId: session?.user?.id || null,
       authorName: session ? undefined : (authorName || "Anonymous"),
       authorEmail: session ? undefined : (authorEmail || null),
-      isApproved: session?.user?.role === "ADMIN" || session?.user?.role === "EDITOR",
+      isApproved: isPrivileged || !config.commentsRequireApproval,
     },
   });
 

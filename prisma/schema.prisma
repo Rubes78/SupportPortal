@@ -177,6 +177,22 @@ model Comment {
   @@map("comments")
 }
 
+model SiteConfig {
+  id                       String   @id @default("default")
+  siteName                 String   @default("Support Portal")
+  siteDescription          String?  @db.Text
+  allowRegistration        Boolean  @default(true)
+  defaultRole              Role     @default(VIEWER)
+  commentsEnabled          Boolean  @default(true)
+  commentsRequireApproval  Boolean  @default(true)
+  anonymousCommentsEnabled Boolean  @default(true)
+  articlesPerPage          Int      @default(10)
+  showAuthor               Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+
+  @@map("site_config")
+}
+
 model ArticleFeedback {
   id        String   @id @default(cuid())
   articleId String

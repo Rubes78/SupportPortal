@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/config";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -10,6 +11,12 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const config = await getSiteConfig();
+
+  if (!config.allowRegistration) {
+    return NextResponse.json({ error: "Registration is currently disabled" }, { status: 403 });
+  }
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -21,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const hashed = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
-    data: { email, name: name || null, password: hashed, role: "VIEWER" },
+    data: { email, name: name || null, password: hashed, role: config.defaultRole },
     select: { id: true, email: true, name: true, role: true },
   });
 

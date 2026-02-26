@@ -24,6 +24,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
     { href: "/admin/categories", label: "Categories" },
     { href: "/admin/tags", label: "Tags" },
     { href: "/admin/comments", label: "Comments" },
+    { href: "/admin/configuration", label: "Configuration" },
   ];
 
   const isActive = (href: string) =>
